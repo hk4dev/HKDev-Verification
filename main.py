@@ -15,7 +15,8 @@ if __name__ == "__main__":
     bot = interaction.Client(
         command_prefix="!",
         intents=discord.Intents.all(),
-        enable_debug_events=True
+        enable_debug_events=True,
+        global_sync_command=True
     )
 
     # cogs = ["cogs." + file[:-3] for file in os.listdir(os.path.join(directory, 'cogs')) if file.endswith(".py")]

@@ -3,6 +3,7 @@ import asyncio
 
 from .https import HttpClient
 from .verificationType import VerificationType
+from .verificationResponse import VerificationResponse
 
 
 class Client:
@@ -53,6 +54,9 @@ class Client:
             key = self.last_key
 
         if verification_type == VerificationType.image:
-            return await self.http.image_key(code=1, key=key, value=value)
+            response = await self.http.image_key(code=1, key=key, value=value)
         elif verification_type == VerificationType.sound:
-            return await self.http.sound_key(code=1, key=key, value=value)
+            response = await self.http.sound_key(code=1, key=key, value=value)
+        else:
+            raise ValueError(f'VerificationType({verification_type}) is not found')
+        return VerificationResponse(response)

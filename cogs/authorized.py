@@ -1,24 +1,23 @@
-import asyncio
-import json
-import logging
-import os
 import io
+import logging
+from typing import NamedTuple
 
 import discord
-from enum import Enum
-from datetime import datetime, timedelta
-from pytz import timezone
 from discord.ext import commands, interaction
 
 from config.config import get_config
 from module import nCaptcha
-from utils.directory import directory
-
 
 logger = logging.getLogger(__name__)
 parser = get_config()
 comment_parser = get_config("comment")
 DBS = None
+
+
+class AuthorizedSession(NamedTuple):
+    context: interaction.ComponentsContext
+    client: nCaptcha.Client
+    verificationType: nCaptcha.VerificationType
 
 
 class AuthorizedReceived:
@@ -31,52 +30,51 @@ class AuthorizedReceived:
         self.client_id = parser.get("DEFAULT", "naver_id")
         self.client_secret = parser.get("DEFAULT", "naver_secret")
 
-        self.authorized_process = discord.Embed(
-            title="인증(Authorized)",
-            description="해당 서버({guild})에 접근하기 위해서는 캡차 과정을 통과하셔야 합니다. 아래의 {tp}의 값을 알맞게 입력해주세요.",
-            color=self.color
-        )
-        self.authorized_process_verification = discord.Embed(
-            title="인증(Authorized)",
-            description="30초 내에 {tp}안에 있는 값을 정확히 입력해주세요.",
-            color=self.color
-        )
+        self.authorized_session = dict()
 
+        self._title = comment_parser.get("Authorization", "title")
+        self._warning_title = comment_parser.get("Authorization", "warningTitle", fallback=None) or self._title
+        self._error_title = comment_parser.get("Authorization", "errorTitle", fallback=None) or self._warning_title
+        self.authorized_process = discord.Embed(
+            title=self._title,
+            description=comment_parser.get("Authorization", "authorized_process"),
+            color=self.color
+        )
         self.authorized_result_success = discord.Embed(
-            title="인증(Authorized)",
-            description="인증에 성공하였습니다..",
+            title=self._title,
+            description=comment_parser.get("Authorization", "authorized_result_success"),
             color=self.color
         )
         self.authorized_result_failed = discord.Embed(
-            title="안내(Warning)",
-            description="결과 다릅니다. 인증을 다시 시도해주시기 바랍니다.",
+            title=self._warning_title,
+            description=comment_parser.get("Authorization", "authorized_result_failed"),
             color=self.warning_color
         )
 
-        self.authorized_timeout = discord.Embed(
-            title="안내(Warning)",
-            description="인증 시간(5분)이 초과되어 인증에 실패하였습니다. 인증을 다시 시도해주시기 바랍니다.",
-            color=self.warning_color
-        )
         self.authorized_timeout_input = discord.Embed(
-            title="안내(Warning)",
-            description="인증 입력 시간(30초)가 초과되어 인증에 실패하였습니다. 인증을 다시 시도해주시기 바랍니다.",
+            title=self._warning_title,
+            description=comment_parser.get("Authorization", "authorized_input_timeout"),
             color=self.warning_color
         )
 
-    @staticmethod
-    def authorization_response_button_check(ctx: interaction.ComponentsContext):
-        user_id = int(ctx.custom_id.lstrip("authorization_response_"))
-        return ctx.custom_id.startswith("authorization_response_") and user_id == ctx.author.id
+        self.authorized_no_session = discord.Embed(
+            title=self._error_title,
+            description=comment_parser.get("Authorization", "authorized_session_not_found"),
+            color=self.error_color
+        )
 
-    async def authorization_check(
+    def authorization_check_session(self, member: discord.User) -> bool:
+        return member.id in self.authorized_session
+
+    async def authorization_setup(
             self,
             ctx: interaction.ComponentsContext,
             verification_type: nCaptcha.VerificationType,
             client: nCaptcha.Client = None,
             refresh: bool = False
-    ) -> bool:
-        await ctx.defer(hidden=True)
+    ) -> None:
+        if not ctx.responded:
+            await ctx.defer(hidden=True)
 
         # Comment
         verification_type_comment = {
@@ -84,7 +82,9 @@ class AuthorizedReceived:
             nCaptcha.VerificationType.sound: "음성"
         }
         self.authorized_process.description = self.authorized_process.description.format(
-            guild=ctx.guild.name, tp=verification_type_comment[verification_type]
+            guild=ctx.guild.name,
+            guild_id=ctx.guild_id,
+            verification_type=verification_type_comment[verification_type]
         )
 
         if client is None:
@@ -107,7 +107,7 @@ class AuthorizedReceived:
             file_type = "wav"
         else:
             await client.http.requests.close()
-            return False
+            return
 
         discord_file = discord.File(io.BytesIO(file), filename="authorized-file-{}.{}".format(
             ctx.author.id, file_type
@@ -116,11 +116,15 @@ class AuthorizedReceived:
             interaction.ActionRow(components=[
                 interaction.Button(
                     style=1,
-                    custom_id="authorization_response_{}".format(ctx.author.id),
+                    custom_id="authorized_session",
                     # emoji="\U00002328",
                     label="인증하기"
                 ),
-                interaction.Button(style=1, custom_id="authorized_refresh", label="갱신 하기"),
+                interaction.Button(
+                    style=1,
+                    custom_id="authorized_refresh",
+                    label="갱신하기"
+                ),
             ])
         ]
         if not ctx.responded:
@@ -136,30 +140,35 @@ class AuthorizedReceived:
                 file=discord_file,
                 components=components
             )
-        response: interaction.ComponentsContext = await self.bot.wait_for_global_component(
-            check=self.authorization_response_button_check,
-            timeout=300
+        self.authorized_session[ctx.author.id] = AuthorizedSession(
+            client=client,
+            context=ctx,
+            verificationType=verification_type
         )
-        await response.modal(
-            custom_id="authorization_response_modal",
-            title="{} 속 문자를 입력하세요.".format(verification_type_comment[verification_type]),
-            components=[
-                interaction.ActionRow(components=[
-                    interaction.TextInput(
-                        custom_id="authorization_response_modal_key",
-                        style=1,
-                        label="{} 속 문자를 입력하세요.".format(verification_type_comment[verification_type]),
-                        required=True
-                    )
-                ])
-            ]
-        )
-        return False
+        return
 
-    # @commands.Cog.listener()
-    # async def on_member_join(self, member: discord.Member):
-    #     self.bot.dispatch(event_name="authorized", member=member)
-    #     return
+    @interaction.detect_component(custom_id="authorized_session")
+    async def authorized_session_call(self, ctx: interaction.ComponentsContext):
+        if not self.authorization_check_session(ctx.author):
+            await ctx.send(embed=self.authorized_no_session, hidden=True)
+            return
+        await ctx.send(comment_parser.get("Authorization", "session_call"), hidden=True)
+        return
+
+    @interaction.detect_component()
+    async def authorized_refresh(self, ctx: interaction.ComponentsContext):
+        if not self.authorization_check_session(ctx.author):
+            await ctx.send(embed=self.authorized_no_session, hidden=True)
+            return
+        session: AuthorizedSession = self.authorized_session[ctx.author.id]
+        await ctx.defer_update(hidden=True)
+        await self.authorization_setup(
+            ctx=session.context,
+            client=session.client,
+            verification_type=session.verificationType,
+            refresh=True
+        )
+        return
 
     def cog_check(self, _):
         return True
@@ -179,11 +188,55 @@ class AuthorizedReceived:
 
     @interaction.detect_component()
     async def authorization_request_button(self, ctx: interaction.ComponentsContext):
-        await self.authorization_check(ctx, nCaptcha.VerificationType.image)
+        if self.authorization_check_session(ctx.author):
+            # If a session already exists, it makes it go through the deletion process.
+            self.authorized_session.pop(ctx.author.id)
+        await self.authorization_setup(ctx, nCaptcha.VerificationType.image)
         return
 
-    @commands.command(name="add_authorization")
-    async def test_robot(self, ctx):
+    @interaction.command(name="인증", description="인증할 때 사용하는 명령어입니다.", sync_command=True)
+    @interaction.option(name="인증키", description="인증 키 값이 입력됩니다.")
+    async def authorized(self, ctx: interaction.ApplicationContext, key: str):
+        if not self.authorization_check_session(ctx.author):
+            await ctx.send(embed=self.authorized_no_session, hidden=True)
+            return
+        session: AuthorizedSession = self.authorized_session[ctx.author.id]
+        response = await session.client.verification(key, verification_type=session.verificationType)
+        self.authorized_session.pop(ctx.author.id)
+        if parser.has_option("Authorization", "timeout"):
+            timeout = parser.getint("Authorization", "timeout")
+            self.authorized_timeout_input.description = self.authorized_timeout_input.description.format(
+                guild=ctx.guild.name,
+                guild_id=ctx.guild_id,
+                time=response.time,
+                max_time=timeout
+            )
+            if timeout == -1 and response.time > 200:
+                await ctx.send(embed=self.authorized_timeout_input, hidden=True)
+                return
+            elif response.time > timeout != -1:
+                await ctx.send(embed=self.authorized_timeout_input, hidden=True)
+                return
+
+        if response.result:
+            self.authorized_result_success.description = self.authorized_result_success.description.format(
+                guild=ctx.guild.name,
+                guild_id=ctx.guild_id,
+                time=response.time
+            )
+            await ctx.send(embed=self.authorized_result_success, hidden=True)
+            self.bot.dispatch('authorized_result_success', ctx, response.time)
+        else:
+            self.authorized_result_failed.description = self.authorized_result_failed.description.format(
+                guild=ctx.guild.name,
+                guild_id=ctx.guild_id,
+                time=response.time
+            )
+            await ctx.send(embed=self.authorized_result_failed, hidden=True)
+        return
+
+    @commands.command(name="register_authorization")
+    async def register_authorization(self, ctx):
         channel = interaction.MessageSendable(
             state=getattr(self.bot, "_connection"),
             channel=ctx.channel
@@ -200,10 +253,6 @@ class AuthorizedReceived:
                 ])
             ]
         )
-        return
-
-    @commands.Cog.listener()
-    async def on_authorized(self, member: discord.Member):
         return
 
 
