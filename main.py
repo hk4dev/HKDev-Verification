@@ -13,7 +13,8 @@ if __name__ == "__main__":
 
     log.info("HKDev Korea 인증시스템을 불러오는 중입니다.")
     bot = interaction.Client(
-        intents=discord.Intents.default(),
+        command_prefix="!",
+        intents=discord.Intents.all(),
         enable_debug_events=True
     )
 
