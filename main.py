@@ -12,9 +12,13 @@ if __name__ == "__main__":
     parser = get_config()
 
     log.info("HKDev Korea 인증시스템을 불러오는 중입니다.")
+    intent = discord.Intents.default()
+    intent.members = True
+    intent.message_content = True
     bot = interaction.Client(
         command_prefix="!",
-        intents=discord.Intents.all(),
+        # intents=discord.Intents.all(),
+        intents=intent,
         enable_debug_events=True,
         global_sync_command=True
     )

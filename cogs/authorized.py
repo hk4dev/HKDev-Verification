@@ -11,7 +11,6 @@ from module import nCaptcha
 logger = logging.getLogger(__name__)
 parser = get_config()
 comment_parser = get_config("comment")
-DBS = None
 
 
 class AuthorizedSession(NamedTuple):
