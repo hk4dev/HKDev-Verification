@@ -1,6 +1,6 @@
 import io
 import logging
-from typing import NamedTuple
+from typing import NamedTuple, Optional
 
 import discord
 from discord.ext import commands, interaction
@@ -9,6 +9,7 @@ from config.config import get_config
 from module import nCaptcha
 
 logger = logging.getLogger(__name__)
+logger_authorized = logger.getChild("authorization")
 parser = get_config()
 comment_parser = get_config("comment")
 
@@ -30,6 +31,8 @@ class AuthorizedReceived:
         self.client_secret = parser.get("DEFAULT", "naver_secret")
 
         self.authorized_session = dict()
+        self._guild: Optional[discord.Guild] = None
+        self._role: Optional[discord.Role] = None
 
         self._title = comment_parser.get("Authorization", "title")
         self._warning_title = comment_parser.get("Authorization", "warningTitle", fallback=None) or self._title
@@ -249,6 +252,7 @@ class AuthorizedReceived:
                 time=response.time
             )
             await ctx.send(embed=self.authorized_result_failed, hidden=True)
+            logger_authorized.info(f"{ctx.author.name}#{ctx.author.discriminator}: 인증 실패")
         return
 
     @commands.command(name="register_authorization")
@@ -272,6 +276,13 @@ class AuthorizedReceived:
         return
 
     @interaction.listener()
+    async def on_ready(self):
+        guild_id = parser.getint("Authorization", "guild_id", fallback=0)
+        role_id = parser.getint("Authorization", "role_id", fallback=0)
+        self._guild = self.bot.get_guild(guild_id)
+        self._role = self._guild.get_role(role_id)
+
+    @interaction.listener()
     async def on_message(self, ctx: discord.Message):
         if ctx is None:
             return
@@ -282,6 +293,12 @@ class AuthorizedReceived:
             ctx.author.id != self.bot.user.id
         ):
             await ctx.delete()
+        return
+
+    @interaction.listener()
+    async def on_authorized_result_success(self, ctx: interaction.ApplicationContext, time: float):
+        logger_authorized.info(f"{ctx.author.name}#{ctx.author.discriminator}: 인증 요건(소요시간: {time}초 < 200초) 충족에 따른 사용자 권한 지금")
+        await ctx.author.add_roles(self._role, reason=f"인증 요건(소요시간: {time}초 < 200초) 충족에 따른 사용자 권한 지금")
         return
 
 

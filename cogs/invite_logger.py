@@ -9,6 +9,8 @@ from discord.state import ConnectionState
 from config.config import get_config
 
 logger = logging.getLogger(__name__)
+logger_member = logger.getChild("member")
+logger_generation = logger.getChild("generation")
 parser = get_config()
 comment_parser = get_config("comment")
 
@@ -51,6 +53,9 @@ class InviteLoggerReceived:
 
     @commands.Cog.listener()
     async def on_invite_create(self, invite: discord.Invite):
+        logger_generation.info(
+            f"초대 코드 생성: 코드({invite.code}) / 사용자({invite.inviter.name}#{invite.inviter.discriminator})"
+        )
         self._invites.append(invite)
         return
 
@@ -103,6 +108,10 @@ class InviteLoggerReceived:
                 )
                 invite_data.channel.append(_invite.channel.mention)
 
+        logger_member.info("사용자 초대 감지: 유입 경로({}) / 코드({})".format(
+            " ".join(invite_data.users),
+            " ".join(invite_data.id)
+        ))
         embed = discord.Embed(color=self.color)
         embed.set_author(
             name='{}#{}'.format(member.name, member.discriminator),

@@ -37,23 +37,23 @@ command = logging.StreamHandler()
 command.setFormatter(logging_format)
 log.addHandler(command)
 
-log_event = get_logger("cogs.event.command")
-logging_file = logging.FileHandler(
-    f"{directory}/log/command.txt", mode="a", encoding="UTF8"
-)
-logging_file.setFormatter(logging_format)
-log_event.addHandler(logging_file)
-
-log_event = get_logger("cogs.event.guild")
-logging_file = logging.FileHandler(
-    f"{directory}/log/event.txt", mode="a", encoding="UTF8"
-)
-logging_file.setFormatter(logging_format)
-log_event.addHandler(logging_file)
-
 log_error = get_logger("cogs.error")
 logging_file = logging.FileHandler(
     f"{directory}/log/error.txt", mode="a", encoding="UTF8"
+)
+logging_file.setFormatter(logging_format)
+log_error.addHandler(logging_file)
+
+log_authorization = get_logger("cogs.authorized.authorization")
+logging_file = logging.FileHandler(
+    f"{directory}/log/authorization.txt", mode="a", encoding="UTF8"
+)
+logging_file.setFormatter(logging_format)
+log_error.addHandler(logging_file)
+
+log_invite_logger = get_logger("cogs.invite_logger.member")
+logging_file = logging.FileHandler(
+    f"{directory}/log/invite_logger.txt", mode="a", encoding="UTF8"
 )
 logging_file.setFormatter(logging_format)
 log_error.addHandler(logging_file)
