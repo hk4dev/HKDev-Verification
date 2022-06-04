@@ -298,7 +298,11 @@ class AuthorizedReceived:
     @interaction.listener()
     async def on_authorized_result_success(self, ctx: interaction.ApplicationContext, time: float):
         logger_authorized.info(f"{ctx.author.name}#{ctx.author.discriminator}: 인증 요건(소요시간: {time}초 < 200초) 충족에 따른 사용자 권한 지금")
-        await ctx.author.add_roles(self._role, reason=f"인증 요건(소요시간: {time}초 < 200초) 충족에 따른 사용자 권한 지금")
+        await ctx.author.add_roles(
+            self._role,
+            reason=f"인증 요건(소요시간: {time}초 < 200초) 충족에 따른 사용자 권한 지금",
+            atomic=True
+        )
         return
 
 
