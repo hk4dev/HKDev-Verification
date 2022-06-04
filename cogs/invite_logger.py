@@ -83,7 +83,7 @@ class InviteLoggerReceived:
             if changed_invite['preData'] is None or changed_invite['postData'] is None:
                 continue
 
-            if changed_invite['preData'].uses != changed_invite['postData'].uses:
+            if int(changed_invite['preData'].uses) != int(changed_invite['postData'].uses):
                 _invite: discord.Invite = changed_invite['postData']
                 # if labeling_parser.has_option('InviteLabeling', _invite.code):
                 #     footer_invite.append(
