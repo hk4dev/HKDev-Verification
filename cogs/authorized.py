@@ -34,32 +34,49 @@ class AuthorizedReceived:
         self._title = comment_parser.get("Authorization", "title")
         self._warning_title = comment_parser.get("Authorization", "warningTitle", fallback=None) or self._title
         self._error_title = comment_parser.get("Authorization", "errorTitle", fallback=None) or self._warning_title
+        self._icon_url = comment_parser.get("Authorization", "title_icon")
         self.authorized_process = discord.Embed(
-            title=self._title,
             description=comment_parser.get("Authorization", "authorized_process"),
             color=self.color
         )
         self.authorized_result_success = discord.Embed(
-            title=self._title,
             description=comment_parser.get("Authorization", "authorized_result_success"),
             color=self.color
         )
         self.authorized_result_failed = discord.Embed(
-            title=self._warning_title,
             description=comment_parser.get("Authorization", "authorized_result_failed"),
             color=self.warning_color
         )
 
         self.authorized_timeout_input = discord.Embed(
-            title=self._warning_title,
             description=comment_parser.get("Authorization", "authorized_input_timeout"),
             color=self.warning_color
         )
 
         self.authorized_no_session = discord.Embed(
-            title=self._error_title,
             description=comment_parser.get("Authorization", "authorized_session_not_found"),
             color=self.error_color
+        )
+
+        self.authorized_process.set_author(
+            name=self._title,
+            icon_url=self._icon_url
+        )
+        self.authorized_result_success.set_author(
+            name=self._title,
+            icon_url=self._icon_url
+        )
+        self.authorized_result_failed.set_author(
+            name=self._warning_title,
+            icon_url=self._icon_url
+        )
+        self.authorized_timeout_input.set_author(
+            name=self._warning_title,
+            icon_url=self._icon_url
+        )
+        self.authorized_no_session.set_author(
+            name=self._error_title,
+            icon_url=self._icon_url
         )
 
     def authorization_check_session(self, member: discord.User) -> bool:
@@ -252,6 +269,19 @@ class AuthorizedReceived:
                 ])
             ]
         )
+        return
+
+    @interaction.listener()
+    async def on_message(self, ctx: discord.Message):
+        if ctx is None:
+            return
+
+        if (
+            ctx.channel.id == 981966649953509446 and
+            718064689140989983 not in [role.id for role in ctx.author.roles] and
+            ctx.author.id != self.bot.user.id
+        ):
+            await ctx.delete()
         return
 
 
