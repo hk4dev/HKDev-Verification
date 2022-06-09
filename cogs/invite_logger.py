@@ -1,5 +1,6 @@
 import datetime
 import logging
+import copy
 from typing import Optional, NamedTuple, List
 
 import discord
@@ -34,7 +35,7 @@ class InviteLoggerReceived:
         self.channel_discord: Optional[discord.TextChannel] = None
         self.channel: Optional[interaction.MessageSendable] = None
         self._guild: Optional[discord.Guild] = None
-        self._invites = []
+        self._invites: List[discord.Invite] = []
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -56,7 +57,7 @@ class InviteLoggerReceived:
         logger_generation.info(
             f"초대 코드 생성: 코드({invite.code}) / 사용자({invite.inviter.name}#{invite.inviter.discriminator})"
         )
-        self._invites.append(invite)
+        self._invites = await self._guild.invites()
         return
 
     @commands.Cog.listener()
@@ -65,17 +66,21 @@ class InviteLoggerReceived:
         return
 
     @commands.Cog.listener()
+    async def on_member_leave(self, _: discord.Member):
+        self._invites = await self._guild.invites()
+        return
+
+    @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
         invite_data = InviteListData()
         invites = {}
-        pre_invites = self._invites[:]
+        pre_invites = copy.copy(self._invites)
         for invite in pre_invites:
             invites[invite.code] = {
                 "preData": invite,
                 "postData": None
             }
-        self._invites = await self._guild.invites()
-        post_invites = self._invites[:]
+        post_invites = self._invites = await self._guild.invites()
         for invite in post_invites:
             if invite.code not in invites:
                 invites[invite.code] = {
