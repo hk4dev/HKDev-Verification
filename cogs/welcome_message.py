@@ -51,4 +51,4 @@ class WelcomeMessageReceived:
 
 
 async def setup(client):
-    client.add_icog(InviteLoggerReceived(client))
+    client.add_icog(WelcomeMessageReceived(client))
