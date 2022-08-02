@@ -45,9 +45,14 @@ class ExcursionDetection:
     async def on_member_remove(self, member: discord.Member):
         registered_time = datetime.datetime.now(tz=datetime.timezone.utc) - member.joined_at
         if registered_time.days < 7:
-            embed = discord.Embed(description="7일 이전에 탈퇴한 사용자 입니다.", color=self.color)
+            embed = discord.Embed(
+                description="{0}#{1}({2})가 7일 이전에 커뮤니티를 탈퇴 하였습니다.".format(
+                    member.name, member.discriminator, member.id
+                ),
+                color=self.color
+            )
             embed.add_field(name="활동 기간", value="{0}일".format(registered_time.days), inline=True)
-            embed.add_field(name="역할 목록(ID)", value=", ".join([str(x.id) for x in member.roles]), inline=True)
+            embed.add_field(name="역할 목록", value=", ".join([x.name for x in member.roles]), inline=True)
             embed.add_field(name="인증 유무", value="O" if member.pending else "X", inline=True)
             await self.channel.send(embed=embed)
         return
