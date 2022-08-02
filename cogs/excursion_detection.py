@@ -1,18 +1,21 @@
+import datetime
 import logging
 from typing import Optional
 
 import discord
-from discord.ext import commands, interaction
+from discord.ext import interaction
 from discord.state import ConnectionState
 
 from config.config import get_config
 
 logger = logging.getLogger(__name__)
+logger_member = logger.getChild("member")
+logger_generation = logger.getChild("generation")
 parser = get_config()
 comment_parser = get_config("comment")
 
 
-class WelcomeMessageReceived:
+class ExcursionDetection:
     def __init__(self, bot: interaction.Client):
         self.bot = bot
         self._connection: ConnectionState = getattr(bot, "_connection")
@@ -23,12 +26,11 @@ class WelcomeMessageReceived:
         self.channel_discord: Optional[discord.TextChannel] = None
         self.channel: Optional[interaction.MessageSendable] = None
         self._guild: Optional[discord.Guild] = None
-        self._invites = []
 
-    @commands.Cog.listener()
+    @interaction.listener()
     async def on_ready(self):
         self.channel_discord = self._connection.get_channel(
-            id=parser.getint("WelcomeMessage", "channel_id", fallback=0)
+            id=parser.getint("ExcursionDetection", "channel_id", fallback=0)
         )
         if self.channel_discord is not None and self.channel is None:
             self.channel = interaction.MessageSendable(
@@ -36,18 +38,20 @@ class WelcomeMessageReceived:
                 channel=self.channel_discord
             )
 
-        guild_id = parser.getint("WelcomeMessage", "guild_id", fallback=0)
+        guild_id = parser.getint("ExcursionDetection", "guild_id", fallback=0)
         self._guild = self.bot.get_guild(guild_id)
 
-    @commands.Cog.listener()
-    async def on_authorized_result_success(self, ctx: interaction.ApplicationContext, _: float):
-        comment = comment_parser.get("WelcomeMessage", "comment").format(
-            author="{0}#{1}".format(ctx.author.name, ctx.author.discriminator),
-            author_menthon=ctx.author.mention
-        )
-        await self.channel.send(comment)
+    @interaction.listener()
+    async def on_member_remove(self, member: discord.Member):
+        registered_time = datetime.datetime.now(tz=datetime.timezone.utc) - member.joined_at
+        if registered_time.days < 7:
+            embed = discord.Embed(description="7일 이전에 탈퇴한 사용자 입니다.", color=self.color)
+            embed.add_field(name="활동 기간", value="{0}일".format(registered_time.days), inline=True)
+            embed.add_field(name="역할 목록(ID)", value=", ".join([str(x.id) for x in member.roles]), inline=True)
+            embed.add_field(name="인증 유무", value="O" if member.pending else "X", inline=True)
+            await self.channel.send(embed=embed)
         return
 
 
 async def setup(client):
-    client.add_icog(WelcomeMessageReceived(client))
+    client.add_icog(ExcursionDetection(client))

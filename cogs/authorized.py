@@ -1,6 +1,6 @@
 import io
 import logging
-from typing import NamedTuple, Optional
+from typing import NamedTuple, Optional, Union
 
 import discord
 from discord.ext import commands, interaction
@@ -60,6 +60,14 @@ class AuthorizedReceived:
             description=comment_parser.get("Authorization", "authorized_session_not_found"),
             color=self.error_color
         )
+        self.authorized_no_session_support = discord.Embed(
+            description=comment_parser.get("Authorization", "authorized_session_no_more_support"),
+            color=self.error_color
+        )
+        self.authorized_already_user = discord.Embed(
+            description=comment_parser.get("Authorization", "authorized_already_user"),
+            color=self.error_color
+        )
 
         self.authorized_process.set_author(
             name=self._title,
@@ -92,6 +100,10 @@ class AuthorizedReceived:
             client: nCaptcha.Client = None,
             refresh: bool = False
     ) -> None:
+        if self._role in ctx.author.roles:
+            await ctx.send(embed=self.authorized_already_user, hidden=True)
+            return
+
         if not ctx.responded:
             await ctx.defer(hidden=True)
 
@@ -171,7 +183,31 @@ class AuthorizedReceived:
         if not self.authorization_check_session(ctx.author):
             await ctx.send(embed=self.authorized_no_session, hidden=True)
             return
-        await ctx.send(comment_parser.get("Authorization", "session_call"), hidden=True)
+
+        await ctx.modal(
+            custom_id="authorization_requests",
+            title=comment_parser.get("Authorization", "modal_title"),
+            components=[
+                interaction.ActionRow(components=[
+                    interaction.TextInput(
+                        custom_id="authorization_key",
+                        style=1,
+                        label=comment_parser.get("Authorization", "modal_label"),
+                        placeholder=comment_parser.get("Authorization", "modal_placeholder"),
+                        required=True
+                    )
+                ])
+            ]
+        )
+
+        # Before: Interaction Command (/인증)
+        # await ctx.send(comment_parser.get("Authorization", "session_call"), hidden=True)
+        return
+
+    @interaction.listener()
+    async def on_modal(self, ctx: interaction.ModalContext):
+        if ctx.custom_id == "authorization_requests":
+            await self._base_authorization(ctx, ctx.components[0].value)
         return
 
     @interaction.detect_component()
@@ -215,10 +251,19 @@ class AuthorizedReceived:
 
     @interaction.command(name="인증", description="인증할 때 사용하는 명령어입니다.", sync_command=True)
     @interaction.option(name="인증키", description="인증 키 값이 입력됩니다.")
-    async def authorized(self, ctx: interaction.ApplicationContext, key: str):
+    async def authorized(self, ctx: interaction.ApplicationContext, _: str):
+        await ctx.send(embed=self.authorized_no_session_support, hidden=True)
+        return
+
+    async def _base_authorization(
+            self,
+            ctx: Union[interaction.ApplicationContext, interaction.ModalContext],
+            key: str
+    ):
         if not self.authorization_check_session(ctx.author):
             await ctx.send(embed=self.authorized_no_session, hidden=True)
             return
+
         session: AuthorizedSession = self.authorized_session[ctx.author.id]
         response = await session.client.verification(key, verification_type=session.verificationType)
         self.authorized_session.pop(ctx.author.id)
@@ -287,12 +332,15 @@ class AuthorizedReceived:
         if ctx is None:
             return
 
-        if (
-            ctx.channel.id == 981966649953509446 and
-            718064689140989983 not in [role.id for role in ctx.author.roles] and
-            ctx.author.id != self.bot.user.id
-        ):
-            await ctx.delete()
+        if ctx.author.id == self.bot.user.id:
+            return
+
+        # if (
+        #     ctx.channel.id == 981966649953509446 and
+        #     718064689140989983 not in [role.id for role in ctx.author.roles] and
+        #     ctx.author.id != self.bot.user.id
+        # ):
+        #     await ctx.delete()
         return
 
     @interaction.listener()
