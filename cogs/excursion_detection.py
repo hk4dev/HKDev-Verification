@@ -23,6 +23,8 @@ class ExcursionDetection:
         self.error_color = int(parser.get("Color", "error"), 16)
         self.warning_color = int(parser.get("Color", "warning"), 16)
 
+        self._role: Optional[discord.Role] = None
+
         self.channel_discord: Optional[discord.TextChannel] = None
         self.channel: Optional[interaction.MessageSendable] = None
         self._guild: Optional[discord.Guild] = None
@@ -39,21 +41,29 @@ class ExcursionDetection:
             )
 
         guild_id = parser.getint("ExcursionDetection", "guild_id", fallback=0)
+        role_id = parser.getint("ExcursionDetection", "role_id", fallback=0)
+
         self._guild = self.bot.get_guild(guild_id)
+        self._role = self._guild.get_role(role_id)
 
     @interaction.listener()
     async def on_member_remove(self, member: discord.Member):
         registered_time = datetime.datetime.now(tz=datetime.timezone.utc) - member.joined_at
         if registered_time.days < 7:
             embed = discord.Embed(
-                description="{0}#{1}({2})가 7일 이전에 커뮤니티를 탈퇴 하였습니다.".format(
+                description="{0}#{1}(<@{2}>)가 7일 이전에 커뮤니티를 탈퇴 하였습니다.".format(
                     member.name, member.discriminator, member.id
                 ),
                 color=self.color
             )
             embed.add_field(name="활동 기간", value="{0}일".format(registered_time.days), inline=True)
-            embed.add_field(name="역할 목록", value=", ".join([x.name for x in member.roles]), inline=True)
-            embed.add_field(name="인증 유무", value="O" if member.pending else "X", inline=True)
+
+            if len(member.roles) > 1:
+                # Filtering `@everyone` mention
+                embed.add_field(name="역할 목록", value=", ".join([x.name for x in member.roles[1:]]), inline=True)
+            else:
+                embed.add_field(name="역할 목록", value="Unknown", inline=True)
+            embed.add_field(name="인증 유무", value="O" if self._role in member.roles else "X", inline=True)
             await self.channel.send(embed=embed)
         return
 
