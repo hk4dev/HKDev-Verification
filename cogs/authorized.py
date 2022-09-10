@@ -335,12 +335,12 @@ class AuthorizedReceived:
         if ctx.author.id == self.bot.user.id:
             return
 
-        # if (
-        #     ctx.channel.id == 981966649953509446 and
-        #     718064689140989983 not in [role.id for role in ctx.author.roles] and
-        #     ctx.author.id != self.bot.user.id
-        # ):
-        #     await ctx.delete()
+        if (
+            ctx.channel.id == 981966649953509446 and
+            718064689140989983 not in [role.id for role in ctx.author.roles] and
+            ctx.author.id != self.bot.user.id
+        ):
+            await ctx.delete()
         return
 
     @interaction.listener()
